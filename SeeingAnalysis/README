@@ -1,0 +1,20 @@
+
+This directory contains various diagnostic plots used to analyse
+engineering data from the MCS commissioning runs. In particular, it incluces
+
+- seeing tests
+- maps and histograms of
+    - spot motion RMS,
+    - spot size and brightness
+- plot by time of
+    - fitted transformations (scaling, etc)
+    - mean spot size/brightness
+
+- overall summaries of the run with plots by time of
+   - telescope parametesr
+   - RMS
+   - spot size
+
+The code should be fairly easily used for similar plots with real PFI
+images, rather than just the pinhole mask.
+

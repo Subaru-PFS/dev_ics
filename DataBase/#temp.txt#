@@ -1,0 +1,6 @@
+insert into mcs_exposure (dome_humidity,insrot,outside_humidity,outside_temperature,adc_pa,mcs_m1_temperature,azimuth,outside_pressure,altitude,dome_pressure,taken_in_hst_at,dome_temperature,mcs_cover_temperature,mcs_exptime,taken_at) VALUES (15.0,0.25,17.5,276.45,2019-08-29,620.3000000000001,4e-06,620.3000000000001,88.89997574,12:29:03.923,5.18,02:29:03.923,273.95,5.0,2.2)
+
+
+
+insert into mcs_data (mcs_frame_id,spot_id,mcs_center_x_pix,mcs_center_y_pix,mcs_second_moment_x_pix,mcs_second_moment_y_pix,peakvalue,mcs_second_moment_xy_pix,bgvalue) VALUES (1760401,0,6428.671352590804,2466.235972877493,3.7971726226953604,2.9352265605316563,3407.0,-0.28269820993268957,0.0)
+

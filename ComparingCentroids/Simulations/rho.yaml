@@ -1,0 +1,17 @@
+input:
+  cat_file_name: output/test_stats_cat.fits
+  image_file_name: output/test_stats_image.fits
+  stamp_size: 48
+output:
+  file_name: output/test_rhostats.fits
+  stats:
+    file_name: output/test_rhostats.pdf
+    type: Rho
+psf:
+  interp:
+    type: Mean
+  model:
+    fastfit: true
+    include_pixel: false
+    type: Gaussian
+verbose: 0

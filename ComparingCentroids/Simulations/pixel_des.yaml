@@ -1,0 +1,34 @@
+input:
+  badpix_hdu: 2
+  cat_file_name: input/DECam_00241238_01_psfcat_tb_maxmag_17.0_magcut_3.0_findstars.fits
+  cat_hdu: 2
+  dec: TELDEC
+  gain: GAINA
+  image_file_name: input/DECam_00241238_01.fits.fz
+  image_hdu: 1
+  nstars: 25
+  ra: TELRA
+  sky_col: BACKGROUND
+  stamp_size: 25
+  wcs:
+    file_name: input/DECam_00241238_01.fits.fz
+    type: Fits
+  weight_hdu: 3
+  x_col: XWIN_IMAGE
+  y_col: YWIN_IMAGE
+output:
+  file_name: output/pixel_des_psf.fits
+psf:
+  interp:
+    order: 1
+    type: BasisPolynomial
+  model:
+    interp: Lanczos(5)
+    scale: 0.26
+    size: 15
+    type: PixelGrid
+  outliers:
+    max_remove: 3
+    nsigma: 1.0
+    type: Chisq
+verbose: 0

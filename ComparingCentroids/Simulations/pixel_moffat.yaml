@@ -1,0 +1,19 @@
+input:
+  cat_file_name: output/pixel_moffat_cat.fits
+  image_file_name: output/pixel_moffat_image.fits
+  noise: 0.010000000000000002
+  sky: 1000
+  stamp_size: 48
+  x_col: x
+  y_col: y
+output:
+  file_name: output/pixel_psf.fits
+psf:
+  interp:
+    order: 1
+    type: BasisPolynomial
+  model:
+    scale: 0.2
+    size: 16
+    type: PixelGrid
+verbose: 0

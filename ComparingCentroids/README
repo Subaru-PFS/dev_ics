@@ -1,0 +1,16 @@
+
+This directory contains the code used for the MCS report, in particular to
+compare different centroiding algorithms. 
+It includes code to
+
+- run centroiding for data sets with different setups
+  (basically an offline version of the MCS code, without the database)
+- run SeXtractor on the same data (PSF fitting and windowed parameters)
+- calculate various diagnostics from the above
+    - spot size, brightness
+    - frame to variation in position
+- plot individual examples of the diagnostics
+- compare different methods individuall or over the whole set
+
+The subdirectory Simulations contains routines to generate simulated
+images, using the output of PSFEx and information from the images.
