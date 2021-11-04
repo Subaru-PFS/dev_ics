@@ -278,8 +278,13 @@ def convPlot(ax,var,diff):
     
     nIter = len(diff)
 
-    # plot delta vs iteration
-    ax.plot(np.arange(1,nIter+1),diff,marker="d")
+    cols=['firebrick','orangered','orange','yellow','yellowgreen','green','teal','cornflowerblue','blue','purple','firebrick','orangered','orange','yellow','yellowgreen','green','teal','cornflowerblue','blue','purple']
+
+    
+    # plot delta vs iteration, use same colours as movePlot
+    ax.plot(np.arange(1,nIter+1),diff,color='black'):
+    for i in range(0,nIter):
+        ax.plot([i+1],diff[i],color=cols[i],marker="d)
 
     # a line at zero
     ax.axhline(y=0,color='black',linestyle='--')
@@ -325,8 +330,8 @@ def movPlot(ax,xC,yC,aL,xM,yM,xT,yT):
     a=ax.scatter(xC,yC,color='black')
 
     #target - black adn white x so it shows over background and spots
-    a=ax.scatter(xT,yT,c='black',marker="+")
-    a=ax.scatter(xT,yT,c='white',marker="x")
+    a=ax.scatter(xT,yT,c='black',marker="+",s=80)
+    a=ax.scatter(xT,yT,c='white',marker="x",s=80)
 
     #adjust limits
     a=ax.set_xlim((xC-aL*1.3,xC+aL*1.3))
