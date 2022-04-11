@@ -183,7 +183,7 @@ class VisDiagnosticPlot(object):
         ax.set_ylabel("N")
 
         if(saveFile == True):
-            fName = f'{self.visitId:d}_{iterVal:d}.pdf'
+            fName = f'convergeHist_{self.visitId:d}_{iterVal:d}.pdf'
             plt.savefig(fName)
         
         return fig,ax
@@ -237,7 +237,7 @@ class VisDiagnosticPlot(object):
         plt.colorbar(sc)
             
         if(saveFile == True):
-            fName = f'{self.visitId:d}_{iterVal:d}.pdf'
+            fName = f'convergeBook_{self.visitId:d}_{iterVal:d}.pdf'
             plt.savefig(fName)
 
         return fig,ax
@@ -290,7 +290,7 @@ class VisDiagnosticPlot(object):
         ax.set_aspect('equal')
 
         if(saveFile == True):
-            fName = f'{self.visitId:d}_{iterVal:d}.pdf'
+            fName = f'convergeMap_{self.visitId:d}_{iterVal:d}.pdf'
             plt.savefig(fName)
 
         
@@ -309,7 +309,7 @@ class VisDiagnosticPlot(object):
             cobras.append(c)
             self.allCobras = np.array(cobras)
 
-    def singleCobraMotion(self,cobraNum, saveFile = False, **kwargs):
+    def singleCobraMotion(self,cobraNum, hardStop = False, blackDogs = False, saveFile = False, **kwargs):
         """
         diagnostic plots for a single cobra.
         """
@@ -347,7 +347,7 @@ class VisDiagnosticPlot(object):
         yC = self.calibModel.centers[cobraInd].imag
         aL = self.calibModel.L1[cobraInd] + self.calibModel.L2[cobraInd]
         
-        self.movPlot(axes[0,0],xM,yM,xT,yT,xC,yC,aL)
+        self.movPlot(axes[0,0],xM,yM,xT,yT,xC,yC,aL,cobraNum)
         self.convPlot(axes[0,1],"t",tM-tT)
         self.convPlot(axes[1,0],"p",pM-pT)
         self.convPlot(axes[1,1],'r',dR)
@@ -358,11 +358,11 @@ class VisDiagnosticPlot(object):
         plt.tight_layout()
 
         if(saveFile == True):
-            fName = f'{self.visitId:d}_{cobraNum:d}.pdf'
+            fName = f'cobraDiag_{self.visitId:d}_{cobraNum:d}.pdf'
             plt.savefig(fName)
 
         
-        return fig,ax
+        return fig,axes
 
     def getAnglesOld(self, xM, yM, cNum):
 
@@ -447,7 +447,7 @@ class VisDiagnosticPlot(object):
             ax =self.overlayFF(ax)
 
         if(saveFile == True):
-            fName = f'{self.visitId:d}.pdf'
+            fName = f'convergeSeq_{self.visitId:d}.pdf'
             plt.savefig(fName)
             
         return fig,ax
@@ -579,7 +579,7 @@ class VisDiagnosticPlot(object):
      
         return ax
         
-    def movPlot(self,ax,xM,yM,xT,yT,xC,yC,aL):
+    def movPlot(self,ax,xM,yM,xT,yT,xC,yC,aL, cobraNum, hardStop = False, blackDots = False):
     
         """
         plot the 2D motion of a single cobra over a convergence run. Generally called by badCobraDiagram.
@@ -609,6 +609,11 @@ class VisDiagnosticPlot(object):
         #target - black adn white x so it shows over background and spots
         a=ax.scatter(xT,yT,c='black',marker="+",s=80)
         a=ax.scatter(xT,yT,c='white',marker="x",s=80)
+
+        if(hardStop == True):
+            ax = self.overlayHardStop(ax, cobraNum = cobraNum)
+        if(blackDots == True):
+            ax = self.overlayBlackDots(ax, cobraNum = cobraNum)
         
         #adjust limits
         a=ax.set_xlim((xC-aL*1.3,xC+aL*1.3))
