@@ -58,7 +58,7 @@ from ics.cobraCharmer import func
 
 class VisDiagnosticPlot(object):
 
-    def __init__(self, xmlFile, dotFile, hostname = 'opdb', port= '5432', dbname = 'opdb', username = 'pfs'):
+    def __init__(self, xmlFile, dotFile, hostname = 'opdb', port= '5432', dbname = 'opdb', username = 'pfs', cameraName = 'rmod_71m'):
 
 
         # initialize convergence data to None
@@ -66,6 +66,7 @@ class VisDiagnosticPlot(object):
         self.convergeData = None
         self.visitId = None
         self.nIter = None
+        self.cameraName = cameraName
         
         
         #load pfi design file
@@ -123,6 +124,79 @@ class VisDiagnosticPlot(object):
         # turn into hex values for plots
         for i in range(self.nIter):
             self.colSeq.append(to_hex(cols[i]))
+        
+    def fidDiff(self,iterVal = None,keyLength = 0.1, saveFile = False):
+
+        if(iterVal == None):
+            iterVal = self.nIter
+
+        fidPos =  np.array([self.fids['fiducialId'],self.fids['x_mm'],self.fids['y_mm']]).T
+        fidList=list(self.fids['fiducialId'].values)
+
+        pfiTransform = transformUtils.fromCameraName(self.cameraName, altitude=60, insrot=0)
+        badFid = [1,32,34,61,68,75,88,89,2,4,33,36,37,65,66,67,68,69]
+        for i in badFid:
+            try:
+                fidList.remove(i)
+            except:
+                pass
+        outerRing = np.zeros(len(self.fids), dtype=bool)   
+        goodFid = np.zeros(len(self.fids), dtype=bool)   
+        for i in [29, 30, 31, 61, 62, 64, 93, 94, 95, 96]:
+            outerRing[self.fids.fiducialId == i] = True
+        for i in fidList:
+            goodFid[self.fids.fiducialId == i] = True
+
+            
+        columns = ['mcs_frame_id', 'spot_id', 'mcs_center_x_pix', 'mcs_center_y_pix', 'mcs_second_moment_x_pix',
+                   'mcs_second_moment_y_pix', 'mcs_second_moment_xy_pix', 'peakvalue', 'bgvalue']
+
+        frameId = self.visitId*100+iterVal
+        mcsData = self.spotData.loc[self.spotData['mcs_frame_id']==frameId].loc[self.spotData['spot_id'] != -1]
+        
+        ffids0,dist0=pfiTransform.updateTransform(mcsData, self.fids[outerRing], matchRadius=8.0, nMatchMin=0.1)
+        ffids1,dist1=pfiTransform.updateTransform(mcsData, self.fids[goodFid], matchRadius=4.2,nMatchMin=0.1)
+        ffids1,dist1=pfiTransform.updateTransform(mcsData, self.fids[goodFid], matchRadius=2,nMatchMin=0.1)
+
+
+        xd=[]
+        yd=[]
+        xp=[]
+        yp=[]
+        d=[]
+
+        xx,yy =  pfiTransform.mcsToPfi(mcsData['mcs_center_x_pix'].values,mcsData['mcs_center_y_pix'].values)
+        for x,y in zip(self.fids['x_mm'].values,self.fids['y_mm'].values):
+            dd=np.sqrt((x-xx)**2+(y-yy)**2).ravel()
+            ind=np.argmin(dd)
+            xd.append(x-xx[ind])
+            yd.append(y-yy[ind])
+            xp.append(x)
+            yp.append(y)
+            d.append(dd[ind])
+        
+        fig,ax=plt.subplots()
+        q = ax.quiver(xp,yp,xd,yd)
+        fTitle = str(keyLength)+" mm"
+        ax.quiverkey(q,-200,200,keyLength,fTitle,coordinates='data',color='red',labelcolor='red')
+        ax.set_ylabel("y")
+        ax.set_xlabel("x")
+        ax.set_aspect('equal')
+        tString = f'Accuracy of Transform pfs_visit_id = {self.visitId:d}; iteration = {iterVal:d}'
+        ax.set_title(tString)
+
+        if(saveFile != False):
+            fName = f'transform{self.visitId:d}_{iterVal:d}.{saveFile}'
+            plt.savefig(fName)
+
+        
+    def loadSpots(self):
+
+        r1 = self.visitId * 100
+        r2 = self.visitId * 100 + 99
+        sql = f'select * from mcs_data where mcs_frame_id between {r1} and {r2}'
+
+        self.spotData = self.db.fetch_query(sql)
             
     def loadConvergence(self,visitId):
 
@@ -134,8 +208,11 @@ class VisDiagnosticPlot(object):
         self.visitId = visitId
 
         # make sql select statuement. 
-        sql = f'select cobra_target.pfs_visit_id, cobra_target.iteration, cobra_target.cobra_id, cobra_target.pfi_nominal_x_mm, cobra_target.pfi_nominal_y_mm, cobra_target.pfi_target_x_mm, cobra_target.pfi_target_y_mm, cobra_match.pfi_center_x_mm, cobra_match.pfi_center_y_mm  from cobra_target full join cobra_match  on cobra_target.pfs_visit_id = cobra_match.pfs_visit_id and cobra_target.iteration = cobra_match.iteration  and cobra_target.cobra_id = cobra_match.cobra_id where cobra_match.pfs_visit_id = {self.visitId} '
+        #sql = f'select cobra_target.pfs_visit_id, cobra_target.iteration, cobra_target.cobra_id, cobra_target.pfi_nominal_x_mm, cobra_target.pfi_nominal_y_mm, cobra_target.pfi_target_x_mm, cobra_target.pfi_target_y_mm, cobra_match.pfi_center_x_mm, cobra_match.pfi_center_y_mm from cobra_target full join cobra_match  on cobra_target.pfs_visit_id = cobra_match.pfs_visit_id and cobra_target.iteration = cobra_match.iteration  and cobra_target.cobra_id = cobra_match.cobra_id where cobra_match.pfs_visit_id = {self.visitId} '
 
+
+        sql = f'select cm.pfs_visit_id, cm.iteration, cm.cobra_id, cm.pfi_center_x_mm, cm.pfi_center_y_mm, ct.pfi_target_x_mm, ct.pfi_target_y_mm, md.mcs_center_x_pix, md.mcs_center_y_pix, md.mcs_second_moment_x_pix,md.mcs_second_moment_y_pix, md.peakvalue  from cobra_match cm inner join cobra_target ct on ct.pfs_visit_id = cm.pfs_visit_id and ct.iteration = cm.iteration and ct.cobra_id = cm.cobra_id inner join mcs_data md on md.mcs_frame_id = cm.pfs_visit_id * 100 + cm.iteration and md.spot_id = cm.spot_id where cm.pfs_visit_id = {self.visitId}'
+        
         # get data
         self.convergeData = self.db.fetch_query(sql)
 
@@ -182,12 +259,107 @@ class VisDiagnosticPlot(object):
         ax.set_xlabel("Distance (mm)")
         ax.set_ylabel("N")
 
-        if(saveFile == True):
-            fName = f'convergeHist_{self.visitId:d}_{iterVal:d}.pdf'
+        if(saveFile != False):
+            fName = f'convergeHist_{self.visitId:d}_{iterVal:d}.{saveFile}'
             plt.savefig(fName)
         
         return fig,ax
 
+
+    def visBright(self, iterVal = None, saveFile = False):
+
+        fig,ax=plt.subplots()
+
+        # check if convergence data has been loaded yet
+        
+        if(isinstance(self.convergeData, type(None))):
+            print("No data loaded")
+            return
+
+        # check iterVal, set to max if undefined
+        
+        if(iterVal == None):
+            iterVal = self.nIter
+
+        filterInd = self.convergeData['iteration'] == iterVal
+        cD = self.convergeData[filterInd]
+        
+        sc=ax.scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1],self.calibModel.centers.imag[cD['cobra_id'].values - 1],c=cD['peakvalue'].values,s=20)
+        ax.set_title("Spot Brightness")
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_aspect('equal')
+        fig.colorbar(sc)
+        
+        plt.suptitle(f'pfs_visit_id = {self.visitId}; iteration = {iterVal}')
+        if(saveFile != False):
+            fName = f'spotBright_{self.visitId:d}_{iterVal:d}.{saveFile}'
+            plt.savefig(fName)
+
+        
+        return fig,ax
+    
+    def visSize(self, iterVal = None, saveFile = False):
+
+        fig,axes=plt.subplots(1,2,figsize=(7,3.5))
+
+        # check if convergence data has been loaded yet
+        
+        if(isinstance(self.convergeData, type(None))):
+            print("No data loaded")
+            return
+
+        # check iterVal, set to max if undefined
+        
+        if(iterVal == None):
+            iterVal = self.nIter
+
+
+        # check iterVal, set to max if undefined
+        
+        if(iterVal == None):
+            iterVal = self.nIter
+
+        # filter the dataframe for the iteration value
+        
+        filterInd = self.convergeData['iteration'] == iterVal
+        cD = self.convergeData[filterInd]
+
+        cRange=np.array([cD['mcs_second_moment_x_pix'].values,cD['mcs_second_moment_y_pix'].values])
+        std = np.nanstd(cRange)
+        avg = np.nanmean(cRange)
+
+        vMin = avg-3*std
+        vMax = avg+3*std
+
+        
+        sc=axes[0].scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1],self.calibModel.centers.imag[cD['cobra_id'].values - 1],c=cD['mcs_second_moment_x_pix'].values,s=20,vmin=vMin,vmax=vMax)
+
+        axes[1].scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1],self.calibModel.centers.imag[cD['cobra_id'].values - 1],c=cD['mcs_second_moment_y_pix'].values,s=20,vmin=vMin,vmax=vMax)
+
+
+
+        
+        axes[0].set_aspect('equal')
+        axes[1].set_aspect('equal')
+        axes[0].set_title("Spot Size (x)")
+        axes[1].set_title("Spot Size (y)")
+        axes[0].set_xlabel("x (mm)")
+        axes[0].set_xlabel("x (mm)")
+        axes[0].set_ylabel("y (mm)")
+
+        fig.subplots_adjust(right=0.8)
+        cbar_ax = fig.add_axes([0.82, 0.15, 0.03, 0.7])
+        fig.colorbar(sc, cax=cbar_ax)
+        
+        plt.suptitle(f'pfs_visit_id = {self.visitId}; iteration = {iterVal}')
+        
+        if(saveFile != False):
+            fName = f'spotSize_{self.visitId:d}_{iterVal:d}.{saveFile}'
+            plt.savefig(fName)
+
+        return fig,axes
+        
     def visConvergenceBool(self,iterVal=None, threshNon = 0.01, threshBad = 0.08, saveFile = False, **kwargs):
         """ 
         Plot convergence/non convergence from the target position at the specified iteration.
@@ -227,17 +399,23 @@ class VisDiagnosticPlot(object):
 
         
         # do a scatter plot
-        sc=ax.scatter(self.calibModel.centers.real[self.goodIdx[ind1]],self.calibModel.centers.imag[self.goodIdx[ind1]],
+        sc=ax.scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1][ind1],self.calibModel.centers.imag[cD['cobra_id'].values - 1][ind1],
                       c='purple',marker='o', s=20, **kwargs)
-        sc=ax.scatter(self.calibModel.centers.real[self.goodIdx[ind2]],self.calibModel.centers.imag[self.goodIdx[ind2]],
+        sc=ax.scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1][ind2],self.calibModel.centers.imag[cD['cobra_id'].values - 1][ind2],
                       c='green',marker='o', s=20, **kwargs)
-        sc=ax.scatter(self.calibModel.centers.real[self.goodIdx[ind3]],self.calibModel.centers.imag[self.goodIdx[ind3]],
+        sc=ax.scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1][ind3],self.calibModel.centers.imag[cD['cobra_id'].values - 1][ind3],
                       c='yellow',marker='o', s=20, **kwargs)
 
-        plt.colorbar(sc)
+        ax.set_aspect('equal')
+        tString = f'pfsVisitId = {self.visitId:d}, iteration = {iterVal:d}'
+        ax.set_title(tString)
+        ax.set_xlabel("X (mm)")
+        ax.set_ylabel("Y (mm)")
+        
+
             
-        if(saveFile == True):
-            fName = f'convergeBook_{self.visitId:d}_{iterVal:d}.pdf'
+        if(saveFile != False):
+            fName = f'convergeBool_{self.visitId:d}_{iterVal:d}.{saveFile}'
             plt.savefig(fName)
 
         return fig,ax
@@ -275,7 +453,7 @@ class VisDiagnosticPlot(object):
 
 
         # do a scatter plot
-        sc=ax.scatter(self.calibModel.centers.real[self.goodIdx],self.calibModel.centers.imag[self.goodIdx],
+        sc=ax.scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1],self.calibModel.centers.imag[cD['cobra_id'].values - 1],
                       c=dist,marker='o', s=20, **kwargs)
 
         plt.colorbar(sc)
@@ -289,8 +467,8 @@ class VisDiagnosticPlot(object):
 
         ax.set_aspect('equal')
 
-        if(saveFile == True):
-            fName = f'convergeMap_{self.visitId:d}_{iterVal:d}.pdf'
+        if(saveFile != False):
+            fName = f'convergeMap_{self.visitId:d}_{iterVal:d}.{saveFile}'
             plt.savefig(fName)
 
         
@@ -309,7 +487,7 @@ class VisDiagnosticPlot(object):
             cobras.append(c)
             self.allCobras = np.array(cobras)
 
-    def singleCobraMotion(self,cobraNum, hardStop = False, blackDogs = False, saveFile = False, **kwargs):
+    def singleCobraMotion(self,cobraNum, saveFile = False, **kwargs):
         """
         diagnostic plots for a single cobra.
         """
@@ -347,7 +525,7 @@ class VisDiagnosticPlot(object):
         yC = self.calibModel.centers[cobraInd].imag
         aL = self.calibModel.L1[cobraInd] + self.calibModel.L2[cobraInd]
         
-        self.movPlot(axes[0,0],xM,yM,xT,yT,xC,yC,aL,cobraNum)
+        self.movPlot(axes[0,0],xM,yM,xT,yT,xC,yC,aL)
         self.convPlot(axes[0,1],"t",tM-tT)
         self.convPlot(axes[1,0],"p",pM-pT)
         self.convPlot(axes[1,1],'r',dR)
@@ -357,12 +535,12 @@ class VisDiagnosticPlot(object):
         fig.suptitle(tstring)
         plt.tight_layout()
 
-        if(saveFile == True):
-            fName = f'cobraDiag_{self.visitId:d}_{cobraNum:d}.pdf'
+        if(saveFile != False):
+            fName = f'single_{self.visitId:d}_{cobraNum:d}.{saveFile}'
             plt.savefig(fName)
 
         
-        return fig,axes
+        return fig,ax
 
     def getAnglesOld(self, xM, yM, cNum):
 
@@ -446,8 +624,8 @@ class VisDiagnosticPlot(object):
         if(ff == True):
             ax =self.overlayFF(ax)
 
-        if(saveFile == True):
-            fName = f'convergeSeq_{self.visitId:d}.pdf'
+        if(saveFile != False):
+            fName = f'sequencePlot_{self.visitId:d}.{saveFile}'
             plt.savefig(fName)
             
         return fig,ax
@@ -579,7 +757,7 @@ class VisDiagnosticPlot(object):
      
         return ax
         
-    def movPlot(self,ax,xM,yM,xT,yT,xC,yC,aL, cobraNum, hardStop = False, blackDots = False):
+    def movPlot(self,ax,xM,yM,xT,yT,xC,yC,aL):
     
         """
         plot the 2D motion of a single cobra over a convergence run. Generally called by badCobraDiagram.
@@ -609,11 +787,6 @@ class VisDiagnosticPlot(object):
         #target - black adn white x so it shows over background and spots
         a=ax.scatter(xT,yT,c='black',marker="+",s=80)
         a=ax.scatter(xT,yT,c='white',marker="x",s=80)
-
-        if(hardStop == True):
-            ax = self.overlayHardStop(ax, cobraNum = cobraNum)
-        if(blackDots == True):
-            ax = self.overlayBlackDots(ax, cobraNum = cobraNum)
         
         #adjust limits
         a=ax.set_xlim((xC-aL*1.3,xC+aL*1.3))
@@ -649,45 +822,45 @@ class VisDiagnosticPlot(object):
             if(var=="r"):
                 ax.set_ylabel("d(R)")        
         
-def getAngles(self,xM,yM,cNum):
-
-    """
-    Replace this with proper code from cobraCharmer
-    """
+    def getAngles(self,xM,yM,cNum):
+        
+        """
+        Replace this with proper code from cobraCharmer
+        """
     
 
-    positions = xM+yM*1j
-    cIdx=cNum-1
-    relativePositions = positions - self.calibModel.centers[cIdx]
-    distance = np.abs(relativePositions)
-    L1 = self.calibModel.L1[cIdx]
-    L2 = self.calibModel.L2[cIdx]
-    distanceSq = distance ** 2
-    L1Sq = L1 ** 2
-    L2Sq = L2 ** 2
-    phiIn = self.calibModel.phiIn[cIdx] + np.pi
-    phiOut = self.calibModel.phiOut[cIdx] + np.pi
-    tht0 = self.calibModel.tht0[cIdx]
-    tht1 = self.calibModel.tht1[cIdx]
-    phi = np.full((len(xM), 2), np.nan)
-    tht = np.full((len(xM), 2), np.nan)
+        positions = xM+yM*1j
+        cIdx=cNum-1
+        relativePositions = positions - self.calibModel.centers[cIdx]
+        distance = np.abs(relativePositions)
+        L1 = self.calibModel.L1[cIdx]
+        L2 = self.calibModel.L2[cIdx]
+        distanceSq = distance ** 2
+        L1Sq = L1 ** 2
+        L2Sq = L2 ** 2
+        phiIn = self.calibModel.phiIn[cIdx] + np.pi
+        phiOut = self.calibModel.phiOut[cIdx] + np.pi
+        tht0 = self.calibModel.tht0[cIdx]
+        tht1 = self.calibModel.tht1[cIdx]
+        phi = np.full((len(xM), 2), np.nan)
+        tht = np.full((len(xM), 2), np.nan)
+        
+        for i in range(len(xM)):
+            ang1 = np.arccos((L1Sq + L2Sq - distanceSq[i]) / (2 * L1 * L2))
+            ang2 = np.arccos((L1Sq + distanceSq[i] - L2Sq) / (2 * L1 * distance[i]))
+            
+            phi[i][0] = ang1 - phiIn
+            tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0) % (2 * np.pi)
 
-    for i in range(len(xM)):
-        ang1 = np.arccos((L1Sq + L2Sq - distanceSq[i]) / (2 * L1 * L2))
-        ang2 = np.arccos((L1Sq + distanceSq[i] - L2Sq) / (2 * L1 * distance[i]))
+            # check if there are additional solutions
+            if ang1 <= np.pi/2 and ang1 > 0:
+               # phiIn < 0
+               phi[i][1] = -ang1 - phiIn
+               tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0) % (2 * np.pi)
+               # check if tht is within two theta hard stops
+            elif ang1 > np.pi/2 and ang1 < np.pi:
+               phi[i][1] = 2 * np.pi - ang1 - phiIn
+               tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0) % (2 * np.pi)
 
-        phi[i][0] = ang1 - phiIn
-        tht[i][0] = (np.angle(relativePositions[i]) + ang2 - tht0) % (2 * np.pi)
-
-        # check if there are additional solutions
-        if ang1 <= np.pi/2 and ang1 > 0:
-            # phiIn < 0
-            phi[i][1] = -ang1 - phiIn
-            tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0) % (2 * np.pi)
-            # check if tht is within two theta hard stops
-        elif ang1 > np.pi/2 and ang1 < np.pi:
-            phi[i][1] = 2 * np.pi - ang1 - phiIn
-            tht[i][1] = (np.angle(relativePositions[i]) - ang2 - tht0) % (2 * np.pi)
-
-    return phi[:,0],tht[:,0]
+        return phi[:,0],tht[:,0]
         
