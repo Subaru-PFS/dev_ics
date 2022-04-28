@@ -46,7 +46,7 @@ import pfs.utils.coordinates.transform as transformUtils
 
 from ics.cobraCharmer import pfi 
 from ics.cobraCharmer import func
-
+import pfsPlotActor.livePlot as livePlot
 
 
 
@@ -56,7 +56,7 @@ from ics.cobraCharmer import func
 #logger.setLevel(logging.INFO)
 
 
-class VisDiagnosticPlot(object):
+class VisDiagnosticPlot(livePlot.LivePlot):
 
     def __init__(self, xmlFile, dotFile, hostname = 'opdb', port= '5432', dbname = 'opdb', username = 'pfs', cameraName = 'rmod_71m'):
 
@@ -207,11 +207,8 @@ class VisDiagnosticPlot(object):
         """
         self.visitId = visitId
 
-        # make sql select statuement. 
-        #sql = f'select cobra_target.pfs_visit_id, cobra_target.iteration, cobra_target.cobra_id, cobra_target.pfi_nominal_x_mm, cobra_target.pfi_nominal_y_mm, cobra_target.pfi_target_x_mm, cobra_target.pfi_target_y_mm, cobra_match.pfi_center_x_mm, cobra_match.pfi_center_y_mm from cobra_target full join cobra_match  on cobra_target.pfs_visit_id = cobra_match.pfs_visit_id and cobra_target.iteration = cobra_match.iteration  and cobra_target.cobra_id = cobra_match.cobra_id where cobra_match.pfs_visit_id = {self.visitId} '
 
-
-        sql = f'select cm.pfs_visit_id, cm.iteration, cm.cobra_id, cm.pfi_center_x_mm, cm.pfi_center_y_mm, ct.pfi_target_x_mm, ct.pfi_target_y_mm, md.mcs_center_x_pix, md.mcs_center_y_pix, md.mcs_second_moment_x_pix,md.mcs_second_moment_y_pix, md.peakvalue  from cobra_match cm inner join cobra_target ct on ct.pfs_visit_id = cm.pfs_visit_id and ct.iteration = cm.iteration and ct.cobra_id = cm.cobra_id inner join mcs_data md on md.mcs_frame_id = cm.pfs_visit_id * 100 + cm.iteration and md.spot_id = cm.spot_id where cm.pfs_visit_id = {self.visitId}'
+        sql = f'select cm.pfs_visit_id, cm.iteration, cm.cobra_id, cm.pfi_center_x_mm, cm.pfi_center_y_mm, ct.pfi_target_x_mm, ct.pfi_target_y_mm, md.mcs_center_x_pix, md.mcs_center_y_pix, md.mcs_second_moment_x_pix,md.mcs_second_moment_y_pix, md.peakvalue  from cobra_match cm inner join cobra_target ct on ct.pfs_visit_id = cm.pfs_visit_id and ct.iteration = cm.iteration and ct.cobra_id = cm.cobra_id inner join mcs_data md on md.mcs_frame_id = cm.pfs_visit_id * 100 + cm.iteration and md.spot_id = cm.spot_id where cm.pfs_visit_id = {self.visitId} order by ct.cobra_id, ct.iteration'
         
         # get data
         self.convergeData = self.db.fetch_query(sql)
@@ -268,6 +265,15 @@ class VisDiagnosticPlot(object):
 
     def visBright(self, iterVal = None, saveFile = False):
 
+        """
+        plot brightness of spots for a given iteration
+
+        if iterVal = -1, plot an average
+        if iterVal = None plot last
+
+        """
+
+        
         fig,ax=plt.subplots()
 
         # check if convergence data has been loaded yet
@@ -277,29 +283,58 @@ class VisDiagnosticPlot(object):
             return
 
         # check iterVal, set to max if undefined
-        
+        if(iterVal == None):
+            iterVal = self.nIter
+            filterInd = self.convergeData['iteration'] == iterVal
+            peak = self.convergeData[filterInd]['peakvalue'].values
+            cInd = self.convergeData[filterInd]['cobra_id'].values - 1
+        elif(iterVal >= 0):
+            filterInd = self.convergeData['iteration'] == iterVal
+            peak = self.convergeData[filterInd]['peakvalue'].values
+            cInd = self.convergeData[filterInd]['cobra_id'].values - 1
+        elif(iterVal == -1):
+            nCob = len(list(set(self.convergeData['cobra_id'].values)))
+            peak=self.convergeData['peakvalue'].to_numpy().reshape((nCob,self.nIter+1)).mean(axis=1)
+            cInd = self.convergeData['cobra_id'].to_numpy().reshape((nCob,self.nIter+1))[:,0]-1
+          
         if(iterVal == None):
             iterVal = self.nIter
 
         filterInd = self.convergeData['iteration'] == iterVal
         cD = self.convergeData[filterInd]
         
-        sc=ax.scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1],self.calibModel.centers.imag[cD['cobra_id'].values - 1],c=cD['peakvalue'].values,s=20)
+        sc=ax.scatter(self.calibModel.centers.real[cInd],self.calibModel.centers.imag[cInd],c=peak,s=20)
         ax.set_title("Spot Brightness")
         ax.set_xlabel("x")
         ax.set_ylabel("y")
         ax.set_aspect('equal')
         fig.colorbar(sc)
-        
-        plt.suptitle(f'pfs_visit_id = {self.visitId}; iteration = {iterVal}')
+
+                      
+        if(iterVal >= 0):
+            iterString = str(int(iterVal))
+        else:
+            iterString = "all"
+            
+        plt.suptitle(f'pfs_visit_id = {self.visitId}; iteration = {iterString}')
+
+            
         if(saveFile != False):
-            fName = f'spotBright_{self.visitId:d}_{iterVal:d}.{saveFile}'
+            fName = f'spotBright_{self.visitId:d}_{iterString}.{saveFile}'
             plt.savefig(fName)
 
         
         return fig,ax
     
     def visSize(self, iterVal = None, saveFile = False):
+
+        """
+        plot x and y size of points for an iteration
+
+        if iterVal = -1, plot average
+        if iterVal = None plot last
+        """
+        
 
         fig,axes=plt.subplots(1,2,figsize=(7,3.5))
 
@@ -313,19 +348,23 @@ class VisDiagnosticPlot(object):
         
         if(iterVal == None):
             iterVal = self.nIter
+            filterInd = self.convergeData['iteration'] == iterVal
+            fx = self.convergeData[filterInd]['mcs_second_moment_x_pix'].values
+            fy = self.convergeData[filterInd]['mcs_second_moment_y_pix'].values
+            cInd = self.convergeData[filterInd]['cobra_id'].values - 1
+        elif(iterVal >= 0):
+            filterInd = self.convergeData['iteration'] == iterVal
+            fx = self.convergeData[filterInd]['mcs_second_moment_x_pix'].values
+            fy = self.convergeData[filterInd]['mcs_second_moment_y_pix'].values
+            cInd = self.convergeData[filterInd]['cobra_id'].values - 1
+        elif(iterVal == -1):
+            nCob = len(list(set(self.convergeData['cobra_id'].values)))
+            fx=self.convergeData['mcs_second_moment_x_pix'].to_numpy().reshape((nCob,self.nIter+1)).mean(axis=1)
+            fy=self.convergeData['mcs_second_moment_y_pix'].to_numpy().reshape((nCob,self.nIter+1)).mean(axis=1)
+            cInd = self.convergeData['cobra_id'].to_numpy().reshape((nCob,self.nIter+1))[:,0]-1
+          
 
-
-        # check iterVal, set to max if undefined
-        
-        if(iterVal == None):
-            iterVal = self.nIter
-
-        # filter the dataframe for the iteration value
-        
-        filterInd = self.convergeData['iteration'] == iterVal
-        cD = self.convergeData[filterInd]
-
-        cRange=np.array([cD['mcs_second_moment_x_pix'].values,cD['mcs_second_moment_y_pix'].values])
+        cRange=np.array([fx,fy])
         std = np.nanstd(cRange)
         avg = np.nanmean(cRange)
 
@@ -333,12 +372,8 @@ class VisDiagnosticPlot(object):
         vMax = avg+3*std
 
         
-        sc=axes[0].scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1],self.calibModel.centers.imag[cD['cobra_id'].values - 1],c=cD['mcs_second_moment_x_pix'].values,s=20,vmin=vMin,vmax=vMax)
-
-        axes[1].scatter(self.calibModel.centers.real[cD['cobra_id'].values - 1],self.calibModel.centers.imag[cD['cobra_id'].values - 1],c=cD['mcs_second_moment_y_pix'].values,s=20,vmin=vMin,vmax=vMax)
-
-
-
+        sc=axes[0].scatter(self.calibModel.centers.real[cInd],self.calibModel.centers.imag[cInd],c=fx,s=20,vmin=vMin,vmax=vMax)
+        sc=axes[1].scatter(self.calibModel.centers.real[cInd],self.calibModel.centers.imag[cInd],c=fy,s=20,vmin=vMin,vmax=vMax)
         
         axes[0].set_aspect('equal')
         axes[1].set_aspect('equal')
@@ -351,11 +386,17 @@ class VisDiagnosticPlot(object):
         fig.subplots_adjust(right=0.8)
         cbar_ax = fig.add_axes([0.82, 0.15, 0.03, 0.7])
         fig.colorbar(sc, cax=cbar_ax)
-        
-        plt.suptitle(f'pfs_visit_id = {self.visitId}; iteration = {iterVal}')
+
+        if(iterVal >= 0):
+            iterString = str(int(iterVal))
+        else:
+            iterString = "all"
+            
+        plt.suptitle(f'pfs_visit_id = {self.visitId}; iteration = {iterString}')
+
         
         if(saveFile != False):
-            fName = f'spotSize_{self.visitId:d}_{iterVal:d}.{saveFile}'
+            fName = f'spotSize_{self.visitId:d}_{iterString}.{saveFile}'
             plt.savefig(fName)
 
         return fig,axes
