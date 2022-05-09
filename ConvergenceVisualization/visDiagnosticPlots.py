@@ -58,7 +58,7 @@ import pfsPlotActor.livePlot as livePlot
 
 class VisDiagnosticPlot(livePlot.LivePlot):
 
-    def __init__(self, xmlFile, dotFile, hostname = 'opdb', port= '5432', dbname = 'opdb', username = 'pfs', cameraName = 'rmod_71m'):
+    def __init__(self, xmlFile, dotFile, hostname = 'db-ics', port= '5432', dbname = 'opdb', username = 'pfs', cameraName =  'canon_50m'):
 
 
         # initialize convergence data to None
@@ -205,7 +205,7 @@ class VisDiagnosticPlot(livePlot.LivePlot):
         This does a join on cobra_target and cobra_match to get both target and actual positions.
         This loads the results at a given iteration
         """
-        self.visitId = visitId
+        self.visitId = int(visitId)
 
 
         sql = f'select cm.pfs_visit_id, cm.iteration, cm.cobra_id, cm.pfi_center_x_mm, cm.pfi_center_y_mm, ct.pfi_target_x_mm, ct.pfi_target_y_mm, md.mcs_center_x_pix, md.mcs_center_y_pix, md.mcs_second_moment_x_pix,md.mcs_second_moment_y_pix, md.peakvalue  from cobra_match cm inner join cobra_target ct on ct.pfs_visit_id = cm.pfs_visit_id and ct.iteration = cm.iteration and ct.cobra_id = cm.cobra_id inner join mcs_data md on md.mcs_frame_id = cm.pfs_visit_id * 100 + cm.iteration and md.spot_id = cm.spot_id where cm.pfs_visit_id = {self.visitId} order by ct.cobra_id, ct.iteration'
@@ -214,8 +214,11 @@ class VisDiagnosticPlot(livePlot.LivePlot):
         self.convergeData = self.db.fetch_query(sql)
 
         # save the maximum iteration, as this is used a lot
-        self.nIter = self.convergeData['iteration'].values.max()
-
+        try:
+            self.nIter = self.convergeData['iteration'].values.max()
+        except:
+            self.nIter = 0
+    
         # set the colour sequenced based on nIter
         self._sequentialColour()
         
@@ -262,7 +265,21 @@ class VisDiagnosticPlot(livePlot.LivePlot):
         
         return fig,ax
 
+    def getUnconvergedList(self,iterVal,convRad=0.01):
 
+        filterInd = self.convergeData['iteration'] == iterVal
+        cD = self.convergeData[filterInd]
+
+        #calculate distance from targets at this iteration
+        
+        dist=np.sqrt((cD['pfi_center_x_mm'].values-cD['pfi_target_x_mm'].values)**2+
+                     (cD['pfi_center_y_mm'].values-cD['pfi_target_y_mm'].values)**2)
+
+        
+        ind = np.where(dist > convRad)
+        self.failInd = cD['cobra_id'].values[ind]-1
+        self.failNo = cD['cobra_id'].values[ind]
+        
     def visBright(self, iterVal = None, saveFile = False):
 
         """
@@ -581,7 +598,7 @@ class VisDiagnosticPlot(livePlot.LivePlot):
             plt.savefig(fName)
 
         
-        return fig,ax
+        return fig,axes
 
     def getAnglesOld(self, xM, yM, cNum):
 
