@@ -1,6 +1,0 @@
-
-This directory contains code used to
- - run the centroiding code saving to numpy files
- - populate the database from these files
- - check the repopulated database
-
