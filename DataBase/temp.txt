@@ -1,1 +1,0 @@
-insert into mcs_exposure (dome_humidity,insrot,outside_humidity,outside_temperature,adc_pa,mcs_m1_temperature,azimuth,outside_pressure,altitude,dome_pressure,taken_in_hst_at,dome_temperature,mcs_cover_temperature,mcs_exptime,taken_at) VALUES (15.0,0.25,17.5,276.45,2019-08-29,620.3000000000001,4e-06,620.3000000000001,88.89997574,12:29:03.923,5.18,02:29:03.923,273.95,5.0,2.2)
